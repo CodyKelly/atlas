@@ -22,3 +22,9 @@ target_link_libraries(atlas
         SDL3::SDL3
         SDL3_shadercross::SDL3_shadercross
 )
+
+add_custom_command(
+        TARGET atlas
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/src/shaders "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/shaders")
