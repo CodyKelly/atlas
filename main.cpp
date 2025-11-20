@@ -38,10 +38,6 @@ public:
 
 const uint32_t SPRITE_COUNT = 10000;
 
-static Uint64 frameCount = 0;
-static Uint64 lastFPSUpdate = 0;
-static double accumulatedTime = 0.0;
-
 typedef struct Matrix4x4 {
   float m11, m12, m13, m14;
   float m21, m22, m23, m24;
@@ -78,6 +74,54 @@ Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
   0,
   -1);
 
+struct GameTime {
+  double deltaTime;
+  double accumulatedTime;
+  double fps;
+};
+
+GameTime updateTime() {
+  // Get current time
+  static Uint64 currentTime;
+  static Uint64 frequency;
+  static Uint64 frameCount = 0;
+  static Uint64 lastFPSUpdate = 0;
+  static double accumulatedTime = 0.0;
+  static double deltaTime;
+  static double fps;
+
+  currentTime = SDL_GetPerformanceCounter();
+  frequency = SDL_GetPerformanceFrequency();
+
+  // Initialize lastFPSUpdate on first frame
+  if (lastFPSUpdate == 0) {
+    lastFPSUpdate = currentTime;
+  }
+
+  // Calculate delta time
+  deltaTime = static_cast<double>(currentTime - lastFPSUpdate) / frequency;
+  accumulatedTime += deltaTime;
+  frameCount++;
+
+  // Update FPS every second
+  if (accumulatedTime >= 1.0) {
+    fps = frameCount / accumulatedTime;
+
+    // Update window title
+    char title[256];
+    SDL_snprintf(title, sizeof(title), "Hello Buffers - FPS: %.1f", fps);
+    SDL_SetWindowTitle(window, title);
+
+    // Reset counters
+    frameCount = 0;
+    accumulatedTime = 0.0;
+  }
+
+  lastFPSUpdate = currentTime;
+
+  return {deltaTime, accumulatedTime, fps};
+}
+
 SDL_GPUShader *LoadShader(
   SDL_GPUDevice *device,
   const char *shaderFilename,
@@ -88,15 +132,15 @@ SDL_GPUShader *LoadShader(
   Uint32 storageTextureCount) {
   if (!device) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "LoadShader: Device error");
-    return NULL;
+    return nullptr;
   }
   if (!shaderFilename) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "LoadShader: Shader filename error");
-    return NULL;
+    return nullptr;
   }
   if (!basePath) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "LoadShader: Base path error");
-    return NULL;
+    return nullptr;
   }
 
   // Auto-detect the shader stage from the file name for convenience
@@ -110,7 +154,7 @@ SDL_GPUShader *LoadShader(
     crossStage = SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT;
   } else {
     SDL_Log("Invalid shader stage!");
-    return NULL;
+    return nullptr;
   }
 
   // Build full path with bounds checking
@@ -118,7 +162,7 @@ SDL_GPUShader *LoadShader(
   int result = SDL_snprintf(fullPath, sizeof(fullPath), "%s/%s", basePath, shaderFilename);
   if (result < 0 || result >= sizeof(fullPath)) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "LoadShader: Path too long for shader '%s'", shaderFilename);
-    return NULL;
+    return nullptr;
   }
 
   // Load shader source with size validation
@@ -126,7 +170,7 @@ SDL_GPUShader *LoadShader(
   void *hlslSource = SDL_LoadFile(fullPath, &hlslSourceSize);
   if (!hlslSource) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "LoadShader: Failed to load shader from '%s' - %s", fullPath, SDL_GetError());
-    return NULL;
+    return nullptr;
   }
 
   SDL_GPUShaderFormat backendFormats = SDL_GetGPUShaderFormats(device);
@@ -134,13 +178,15 @@ SDL_GPUShader *LoadShader(
   const char *entrypoint;
 
   if (backendFormats & SDL_GPU_SHADERFORMAT_SPIRV) {
-    SDL_snprintf(fullPath, sizeof(fullPath), "%sContent/Shaders/Compiled/SPIRV/%s.spv", basePath, shaderFilename);
     format = SDL_GPU_SHADERFORMAT_SPIRV;
     entrypoint = "main";
   } else if (backendFormats & SDL_GPU_SHADERFORMAT_MSL) {
-    SDL_snprintf(fullPath, sizeof(fullPath), "%sContent/Shaders/Compiled/MSL/%s.msl", basePath, shaderFilename);
     format = SDL_GPU_SHADERFORMAT_MSL;
     entrypoint = "main0";
+  } else {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "No supported shader format available");
+    SDL_free(hlslSource);
+    return nullptr;
   }
 
   SDL_ShaderCross_HLSL_Info hlslInfo = {
@@ -154,26 +200,18 @@ SDL_GPUShader *LoadShader(
   size_t codeSize;
   void *code = SDL_ShaderCross_CompileSPIRVFromHLSL(&hlslInfo, &codeSize);
 
-  switch (format) {
-    case SDL_GPU_SHADERFORMAT_SPIRV:
-      break;
-    case SDL_GPU_SHADERFORMAT_MSL: {
-      auto shaderCrossStage = static_cast<SDL_ShaderCross_ShaderStage>(stage);
-      auto spirvInfo = SDL_ShaderCross_SPIRV_Info{
-        static_cast<const unsigned char *>(code),
-        codeSize,
-        "main",
-        shaderCrossStage,
-      };
-      auto mslCode = SDL_ShaderCross_TranspileMSLFromSPIRV(&spirvInfo);
-      SDL_Log("%s", static_cast<const char *>(mslCode));
-      SDL_free(code);
-      code = mslCode;
-      codeSize = SDL_strlen(static_cast<const char *>(code));
-      break;
-    }
-    default:
-      LogError("Unsupported shader format");
+
+  if (format == SDL_GPU_SHADERFORMAT_MSL) {
+    const auto spirvInfo = SDL_ShaderCross_SPIRV_Info{
+      static_cast<const unsigned char *>(code),
+      codeSize,
+      "main",
+      crossStage,
+    };
+    const auto mslCode = SDL_ShaderCross_TranspileMSLFromSPIRV(&spirvInfo);
+    SDL_free(code);
+    code = mslCode;
+    codeSize = SDL_strlen(static_cast<const char *>(code));
   }
 
   if (!code) {
@@ -195,10 +233,10 @@ SDL_GPUShader *LoadShader(
   shaderInfo.num_storage_buffers = storageBufferCount;
   shaderInfo.num_storage_textures = storageTextureCount;
   SDL_GPUShader *shader = SDL_CreateGPUShader(device, &shaderInfo);
-  if (shader == NULL) {
+  if (shader == nullptr) {
     SDL_Log("Failed to create shader!");
     SDL_free(code);
-    return NULL;
+    return nullptr;
   }
 
   SDL_free(code);
@@ -259,35 +297,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
 }
 
 SDL_AppResult SDL_AppIterate(void *appstate) {
-  // Get current time
-  Uint64 currentTime = SDL_GetPerformanceCounter();
-  Uint64 frequency = SDL_GetPerformanceFrequency();
-
-  // Initialize lastFPSUpdate on first frame
-  if (lastFPSUpdate == 0) {
-    lastFPSUpdate = currentTime;
-  }
-
-  // Calculate delta time
-  double deltaTime = (double) (currentTime - lastFPSUpdate) / frequency;
-  accumulatedTime += deltaTime;
-  frameCount++;
-
-  // Update FPS every second
-  if (accumulatedTime >= 1.0) {
-    double fps = frameCount / accumulatedTime;
-
-    // Update window title
-    char title[256];
-    SDL_snprintf(title, sizeof(title), "Hello Buffers - FPS: %.1f", fps);
-    SDL_SetWindowTitle(window, title);
-
-    // Reset counters
-    frameCount = 0;
-    accumulatedTime = 0.0;
-  }
-
-  lastFPSUpdate = currentTime;
+  auto [deltaTime, accumulatedTime, fps] = updateTime();
 
   commandBuffer = SDL_AcquireGPUCommandBuffer(gpuDevice);
   if (!commandBuffer) {
@@ -306,30 +316,24 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
       spriteBuffers->_transferBuffer,
       true);
 
-    const float gridSpacing = 1.0f;
+    const float gridSpacing = 0.1f;
     const float shapeScale = 4.0f;
 
     // Compute grid dimensions in pixels
-    float gridWidth = (1) * gridSpacing;
-    float gridHeight = (1) * gridSpacing;
-
-    // Center offset
-    float offsetX = (800.0f - gridWidth) * 0.5f;
-    float offsetY = (600.0f - gridHeight) * 0.5f;
+    float gridWidth = gridSpacing;
+    float gridHeight = gridSpacing;
 
     for (int i = 0; i < SPRITE_COUNT; i++) {
-      int row = i;
-      int col = i;
-      dataPtr[i].x = offsetX + col * gridSpacing;
-      dataPtr[i].y = offsetY + row * gridSpacing;
-      dataPtr[i].z = dataPtr[i].y;
-      dataPtr[i].rotation = 10.0f; // rotate based on time
-      dataPtr[i].scale = shapeScale;
-      // float angle = time + (i * 0.1f);
-      // dataPtr[i].x = 400 + SDL_cosf(angle) * 200;
-      // dataPtr[i].y = 300 + SDL_sinf(angle) * 200;
-      // dataPtr[i].rotation = time;
-      // dataPtr[i].scale = 20.0f + SDL_sinf(i) * 10.0f;
+      int row = i * gridHeight;
+      int col = i * gridWidth;
+      float angle = accumulatedTime * i * 100.0f;
+      // Center offset
+      float offsetX = 2 * i;
+      float offsetY = 3 * i;
+      dataPtr[i].x = 400 + SDL_cosf(angle) * 200 + offsetX;
+      dataPtr[i].y = 300 + SDL_sinf(angle) * 200 + offsetY;
+      dataPtr[i].rotation = angle;
+      dataPtr[i].scale = 100.0f;
       dataPtr[i].r = 1.0f;
       dataPtr[i].g = 1.0f;
       dataPtr[i].b = 1.0f;
