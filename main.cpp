@@ -6,59 +6,9 @@
 #include "SDL3/SDL.h"
 #include "SDL3_shadercross/SDL_shadercross.h"
 
-class GPUBufferPair {
-public:
-  SDL_GPUTransferBuffer *_transferBuffer;
-  SDL_GPUBuffer *_dataBuffer;
-  SDL_GPUDevice *_gpuDevice;
-
-  GPUBufferPair(Uint32 size, SDL_GPUDevice *gpuDevice) : _gpuDevice(gpuDevice) {
-    SDL_GPUTransferBufferCreateInfo shapeTransferBufferCreateInfo = {
-      .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-      .size = size,
-    };
-    _transferBuffer = SDL_CreateGPUTransferBuffer(_gpuDevice, &shapeTransferBufferCreateInfo);
-
-    SDL_GPUBufferCreateInfo shapeBufferCreateInfo = {
-      .usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-      .size = size,
-    };
-    _dataBuffer = SDL_CreateGPUBuffer(_gpuDevice, &shapeBufferCreateInfo);
-  }
-
-  ~GPUBufferPair() {
-    ReleaseBuffers();
-  }
-
-  void ReleaseBuffers() {
-    SDL_ReleaseGPUBuffer(_gpuDevice, _dataBuffer);
-    SDL_ReleaseGPUTransferBuffer(_gpuDevice, _transferBuffer);
-  }
-};
+#include "src/ResourceManager.h"
 
 const uint32_t SPRITE_COUNT = 10000;
-
-typedef struct Matrix4x4 {
-  float m11, m12, m13, m14;
-  float m21, m22, m23, m24;
-  float m31, m32, m33, m34;
-  float m41, m42, m43, m44;
-} Matrix4x4;
-
-Matrix4x4 Matrix4x4_CreateOrthographicOffCenter(
-  float left,
-  float right,
-  float bottom,
-  float top,
-  float zNearPlane,
-  float zFarPlane) {
-  return (Matrix4x4){
-    2.0f / (right - left), 0, 0, 0,
-    0, 2.0f / (top - bottom), 0, 0,
-    0, 0, 1.0f / (zNearPlane - zFarPlane), 0,
-    (left + right) / (left - right), (top + bottom) / (bottom - top), zNearPlane / (zNearPlane - zFarPlane), 1
-  };
-}
 
 SDL_GPUGraphicsPipeline *pipeline;
 SDL_GPUCommandBuffer *commandBuffer;
@@ -66,13 +16,6 @@ SDL_GPUTexture *swapchainTexture;
 SDL_GPUDevice *gpuDevice;
 SDL_Window *window;
 GPUBufferPair *spriteBuffers;
-Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
-  0,
-  800,
-  600,
-  0,
-  0,
-  -1);
 
 struct GameTime {
   double deltaTime;

@@ -15,7 +15,11 @@ add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(vendored/SDL_shadercross EXCLUDE_FROM_ALL)
 
 add_executable(atlas main.cpp
-        main.cpp)
+        main.cpp
+        src/ResourceManager.cpp
+        src/ResourceManager.h
+        camera.cpp
+        camera.h)
 
 # Link to the actual SDL3 library.
 target_link_libraries(atlas
