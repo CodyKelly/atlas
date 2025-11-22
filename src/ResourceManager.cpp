@@ -6,6 +6,9 @@
 
 #include <stdexcept>
 #include <vector>
+#include <string>
+#include <ranges>
+
 #include <SDL3/SDL.h>
 #include <SDL3_shadercross/SDL_shadercross.h>
 
@@ -36,9 +39,13 @@ void ResourceManager::Init(const char* windowTitle, int width, int height, SDL_W
         LogError("SDL_ClaimWindowForGPUDevice failed");
         throw std::runtime_error("SDL_ClaimWindowForGPUDevice failed");
     }
+
+    pipelines = std::unordered_map<string, SDL_GPUGraphicsPipeline*>();
+    buffers = std::unordered_map<string, SDL_GPUBuffer*>();
+    transferBuffers = std::vector<SDL_GPUTransferBuffer*>();
 }
 
-SDL_GPUTransferBuffer* ResourceManager::AcquireTransferBuffer(SDL_GPUTransferBufferCreateInfo* createInfo)
+SDL_GPUTransferBuffer* ResourceManager::AcquireTransferBuffer(const SDL_GPUTransferBufferCreateInfo* createInfo)
 {
     for (auto buffer : transferBuffers)
     {
@@ -47,21 +54,32 @@ SDL_GPUTransferBuffer* ResourceManager::AcquireTransferBuffer(SDL_GPUTransferBuf
             return buffer;
         }
     }
+
+    SDL_GPUTransferBuffer* newBuffer = SDL_CreateGPUTransferBuffer(gpuDevice, createInfo);
+    transferBuffers.push_back(newBuffer);
+    return newBuffer;
 }
 
 ResourceManager::~ResourceManager()
 {
-    for (const auto buffer : buffers)
+    for (const auto buffer : buffers | std::views::values)
     {
-        SDL_ReleaseGPUBuffer(gpuDevice, buffer.second);
+        SDL_ReleaseGPUBuffer(gpuDevice, buffer);
     }
     for (const auto buffer : transferBuffers)
     {
         SDL_ReleaseGPUTransferBuffer(gpuDevice, buffer);
     }
+    for (const auto pipeline : pipelines | std::views::values)
+    {
+        SDL_ReleaseGPUGraphicsPipeline(gpuDevice, pipeline);
+    }
+    SDL_ReleaseWindowFromGPUDevice(gpuDevice, window);
+    SDL_DestroyGPUDevice(gpuDevice);
+    SDL_DestroyWindow(window);
 }
 
-SDL_GPUBuffer* ResourceManager::CreateBuffer(const char* name, SDL_GPUBufferCreateInfo* createInfo)
+SDL_GPUBuffer* ResourceManager::CreateBuffer(const string& name, const SDL_GPUBufferCreateInfo* createInfo)
 {
     if (buffers[name])
     {
@@ -74,7 +92,7 @@ SDL_GPUBuffer* ResourceManager::CreateBuffer(const char* name, SDL_GPUBufferCrea
 }
 
 SDL_GPUGraphicsPipeline* ResourceManager::CreateGraphicsPipeline(
-    const char* name,
+    const string& name,
     const ShaderInfo& vertexShaderInfo,
     const ShaderInfo& fragmentShaderInfo
 )
@@ -220,6 +238,6 @@ SDL_GPUShader* ResourceManager::LoadShader(const ShaderInfo& info) const
 
     SDL_free(code);
 
-    SDL_Log("Successfully created GPU shader for %s", shaderPath);
+    SDL_Log("Successfully created GPU shader for %s", info.shaderPath);
     return shader;
 }
