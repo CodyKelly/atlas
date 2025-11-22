@@ -7,6 +7,8 @@
 #include "SDL3_shadercross/SDL_shadercross.h"
 
 #include "src/ResourceManager.h"
+#include "src/SpriteBatch.h"
+#include "src/math.h"
 
 ResourceManager resourceManager;
 
@@ -15,235 +17,147 @@ SDL_GPUTexture* swapchainTexture;
 SDL_GPUBuffer* spriteBuffer;
 SDL_GPUTransferBuffer* spriteTransferBuffer;
 
-typedef struct Matrix4x4
-{
-  float m11, m12, m13, m14;
-  float m21, m22, m23, m24;
-  float m31, m32, m33, m34;
-  float m41, m42, m43, m44;
-} Matrix4x4;
+SpriteBatch* spriteBatch;
 
-Matrix4x4 Matrix4x4_CreateOrthographicOffCenter(
-  float left,
-  float right,
-  float bottom,
-  float top,
-  float zNearPlane,
-  float zFarPlane)
-{
-  return (Matrix4x4){
-    2.0f / (right - left), 0, 0, 0,
-    0, 2.0f / (top - bottom), 0, 0,
-    0, 0, 1.0f / (zNearPlane - zFarPlane), 0,
-    (left + right) / (left - right), (top + bottom) / (bottom - top), zNearPlane / (zNearPlane - zFarPlane), 1
-  };
-}
-
-struct GameTime
+struct TimeInfo
 {
   double deltaTime;
-  double accumulatedTime;
+  double totalTime;
   double fps;
 };
 
-struct SpriteInstance
-{
-  float x, y, z, rotation;
-  float scale, padding1, padding2, padding3;
-  float r, g, b, a;
-};
-
-constexpr uint32_t SPRITE_COUNT = 10000;
+constexpr uint32_t SPRITE_COUNT = 500000;
 
 Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
   0,
-  800,
-  600,
+  1000,
+  1000,
   0,
   0,
   -1);
 
-GameTime updateTime()
+TimeInfo updateTime()
 {
-  // Get current time
-  static Uint64 currentTime;
-  static Uint64 frequency;
+  static Uint64 lastFrameTime = 0;
+  static Uint64 fpsUpdateTime = 0;
   static Uint64 frameCount = 0;
-  static Uint64 lastFPSUpdate = 0;
-  static double accumulatedTime = 0.0;
-  static double deltaTime;
-  static double fps;
+  static float fps = 0.0f;
 
-  currentTime = SDL_GetPerformanceCounter();
-  frequency = SDL_GetPerformanceFrequency();
+  Uint64 currentTime = SDL_GetTicksNS(); // Nanoseconds since SDL_Init
 
-  // Initialize lastFPSUpdate on first frame
-  if (lastFPSUpdate == 0)
+  // Initialize on first call
+  if (lastFrameTime == 0)
   {
-    lastFPSUpdate = currentTime;
+    lastFrameTime = currentTime;
+    fpsUpdateTime = currentTime;
   }
 
-  // Calculate delta time
-  deltaTime = static_cast<double>(currentTime - lastFPSUpdate) / frequency;
-  accumulatedTime += deltaTime;
+  // Calculate delta time in seconds
+  float deltaTime = (currentTime - lastFrameTime) / 1000000000.0f;
+  float totalTime = currentTime / 1000000000.0f; // Total time since init
+  lastFrameTime = currentTime;
+
   frameCount++;
 
   // Update FPS every second
-  if (accumulatedTime >= 1.0)
+  float timeSinceUpdate = (currentTime - fpsUpdateTime) / 1000000000.0f;
+  if (timeSinceUpdate >= 1.0f)
   {
-    fps = frameCount / accumulatedTime;
+    fps = frameCount / timeSinceUpdate;
 
-    // Update window title
     char title[256];
-    SDL_snprintf(title, sizeof(title), "Hello Buffers - FPS: %.1f", fps);
+    SDL_snprintf(title, sizeof(title), "TRIANGLES - FPS: %.1f", fps);
     SDL_SetWindowTitle(resourceManager.GetWindow(), title);
 
-    // Reset counters
     frameCount = 0;
-    accumulatedTime = 0.0;
+    fpsUpdateTime = currentTime;
   }
 
-  lastFPSUpdate = currentTime;
-
-  return {deltaTime, accumulatedTime, fps};
+  return {deltaTime, totalTime, fps};
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 {
-  resourceManager.Init("Game", 800, 600, true ? SDL_WINDOW_RESIZABLE : 0);
+  resourceManager.Init("TRIANGLES", 1000, 1000, SDL_WINDOW_RESIZABLE);
 
-  resourceManager.CreateGraphicsPipeline(
-    "sprites",
-    {
-      "./shaders/triangle.vert.hlsl",
-      0, 1, 1, 0
-    }, {
-      "./shaders/triangle.frag.hlsl",
-      0, 0, 0, 0
-    }
+  resourceManager.CreateGraphicsPipeline("sprites",
+                                         {"./shaders/triangle.vert.hlsl", 0, 1, 1, 0},
+                                         {"./shaders/triangle.frag.hlsl", 0, 0, 0, 0}
   );
+  spriteBatch = new SpriteBatch(&resourceManager, 500000);
 
-  SDL_GPUBufferCreateInfo spriteBufferCreateInfo = {
-    .usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-    .size = sizeof(SpriteInstance) * SPRITE_COUNT
-  };
-  spriteBuffer = resourceManager.CreateBuffer("sprites", &spriteBufferCreateInfo);
-
-  SDL_GPUTransferBufferCreateInfo spriteTransferBufferCreateInfo = {
-    .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-    .size = sizeof(SpriteInstance) * SPRITE_COUNT
-  };
-  spriteTransferBuffer = resourceManager.AcquireTransferBuffer(&spriteTransferBufferCreateInfo);
-
+  for (int i = 0; i < SPRITE_COUNT; i++)
+  {
+    spriteBatch->AddSprite(rand() % 1000, rand() % 1000, 10.0f);
+  }
 
   return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
-  auto [deltaTime, accumulatedTime, fps] = updateTime();
+  auto [deltaTime, totalTime, fps] = updateTime();
 
-  commandBuffer = SDL_AcquireGPUCommandBuffer(resourceManager.GetGPUDevice());
-  if (!commandBuffer)
+  // Get current window size
+  int windowWidth, windowHeight;
+  SDL_GetWindowSize(resourceManager.GetWindow(), &windowWidth, &windowHeight);
+
+  Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
+    0, windowWidth, windowHeight, 0, 0, -1
+  );
+
+  float centerX = windowWidth / 2.0f;
+  float centerY = windowHeight / 2.0f;
+
+  SpriteInstance* sprites = spriteBatch->GetSpriteData();
+  size_t spriteCount = spriteBatch->GetSpriteCount();
+
+  for (size_t i = 0; i < spriteCount; i++)
   {
-    LogError("SDL_AcquireGPUCommandBuffer failed");
-    return SDL_APP_FAILURE;
+    float spiralSpeed = 0.5f;
+    float spiralTightness = 500.0f / SPRITE_COUNT;
+    float baseAngle = i * 0.05f;
+
+    float angle = baseAngle + totalTime * spiralSpeed;
+    float radius = i * spiralTightness;
+
+    sprites[i].x = centerX + SDL_cosf(angle) * radius;
+    sprites[i].y = centerY + SDL_sinf(angle) * radius;
+    sprites[i].rotation = angle;
+
+    float t = (float)i / spriteCount;
+    sprites[i].r = 0.5f + 0.5f * SDL_sinf(t * 6.28f);
+    sprites[i].g = 0.5f + 0.5f * SDL_sinf(t * 6.28f + 2.09f);
+    sprites[i].b = 0.5f + 0.5f * SDL_sinf(t * 6.28f + 4.18f);
+    sprites[i].a = 1.0f;
   }
 
-  if (!SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer, resourceManager.GetWindow(), &swapchainTexture, nullptr,
-                                             nullptr))
+  // Mark as dirty after bulk update
+  spriteBatch->MarkDirty();
+
+  commandBuffer = SDL_AcquireGPUCommandBuffer(resourceManager.GetGPUDevice());
+  if (!commandBuffer) return SDL_APP_FAILURE;
+
+  if (!SDL_WaitAndAcquireGPUSwapchainTexture(commandBuffer,
+                                             resourceManager.GetWindow(), &swapchainTexture, nullptr, nullptr))
   {
-    LogError("SDL_WaitAndAcquireGPUSwapchainTexture failed");
     return SDL_APP_FAILURE;
   }
 
   if (swapchainTexture)
   {
-    SpriteInstance* dataPtr = (SpriteInstance*)SDL_MapGPUTransferBuffer(
-      resourceManager.GetGPUDevice(),
-      spriteTransferBuffer,
-      true);
+    spriteBatch->Upload(commandBuffer);
 
-    const float gridSpacing = 0.1f;
-    const float shapeScale = 4.0f;
-
-    // Compute grid dimensions in pixels
-    float gridWidth = gridSpacing;
-    float gridHeight = gridSpacing;
-
-    for (int i = 0; i < SPRITE_COUNT; i++)
-    {
-      int row = i * gridHeight;
-      int col = i * gridWidth;
-      float angle = accumulatedTime * i * 100.0f;
-      // Center offset
-      float offsetX = 2 * i;
-      float offsetY = 3 * i;
-      dataPtr[i].x = 400 + SDL_cosf(angle) * 200 + offsetX;
-      dataPtr[i].y = 300 + SDL_sinf(angle) * 200 + offsetY;
-      dataPtr[i].rotation = angle;
-      dataPtr[i].scale = 100.0f;
-      dataPtr[i].r = 1.0f;
-      dataPtr[i].g = 1.0f;
-      dataPtr[i].b = 1.0f;
-      dataPtr[i].a = 1.0f;
-
-      if (row == 0 || col == 0 || row == 1 || col == 1)
-      {
-        dataPtr[i].g = 0.0f;
-        dataPtr[i].b = 0.0f;
-      }
-    }
-
-    SDL_UnmapGPUTransferBuffer(resourceManager.GetGPUDevice(), spriteTransferBuffer);
-
-    // Upload shape data
-    SDL_GPUCopyPass* copyPass = SDL_BeginGPUCopyPass(commandBuffer);
-    SDL_GPUTransferBufferLocation shapeTransferBufferLocation = {
-      .transfer_buffer = spriteTransferBuffer,
-      .offset = 0,
-    };
-    SDL_GPUBufferRegion shapeBufferRegion = {
-      .buffer = spriteBuffer,
-      .offset = 0,
-      .size = SPRITE_COUNT * sizeof(SpriteInstance),
-    };
-    SDL_UploadToGPUBuffer(
-      copyPass,
-      &shapeTransferBufferLocation,
-      &shapeBufferRegion,
-      true);
-    SDL_EndGPUCopyPass(copyPass);
-
-    SDL_GPUColorTargetInfo colorTargetInfo = {
+    SDL_GPUColorTargetInfo colorTarget = {
       .texture = swapchainTexture,
-      .clear_color = (SDL_FColor){0.25f, 0.25f, 1.0f, 1.0f},
+      .clear_color = {0.25f, 0.25f, 1.0f, 1.0f},
       .load_op = SDL_GPU_LOADOP_CLEAR,
       .store_op = SDL_GPU_STOREOP_STORE
     };
-    SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(
-      commandBuffer,
-      &colorTargetInfo,
-      1,
-      NULL);
 
-    SDL_BindGPUGraphicsPipeline(renderPass, resourceManager.GetGraphicsPipeline("sprites"));
-    SDL_BindGPUVertexStorageBuffers(
-      renderPass,
-      0,
-      &spriteBuffer,
-      1);
-    SDL_PushGPUVertexUniformData(
-      commandBuffer,
-      0,
-      &cameraMatrix,
-      sizeof(Matrix4x4));
-    SDL_DrawGPUPrimitives(
-      renderPass,
-      SPRITE_COUNT * 6,
-      1,
-      0,
-      0);
+    SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(
+      commandBuffer, &colorTarget, 1, NULL);
+    spriteBatch->Draw(renderPass, commandBuffer, cameraMatrix);
 
     SDL_EndGPURenderPass(renderPass);
   }
@@ -252,7 +166,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppEvent(void* appstate, const SDL_Event* event)
+SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 {
   switch (event->type)
   {

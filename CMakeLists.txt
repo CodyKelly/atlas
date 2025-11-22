@@ -18,6 +18,9 @@ add_executable(atlas main.cpp
         main.cpp
         src/ResourceManager.cpp
         src/ResourceManager.h
+        src/SpriteBatch.cpp
+        src/SpriteBatch.h
+        src/math.h
         #        camera.cpp
         #        camera.h
 )
