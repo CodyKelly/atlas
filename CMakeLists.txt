@@ -21,8 +21,9 @@ add_executable(atlas main.cpp
         src/SpriteBatch.cpp
         src/SpriteBatch.h
         src/math.h
-        #        camera.cpp
-        #        camera.h
+        src/Camera.h
+        src/Camera.cpp
+        src/Transform.h
 )
 
 # Link to the actual SDL3 library.

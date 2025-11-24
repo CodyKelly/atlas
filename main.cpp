@@ -5,6 +5,7 @@
 #include "SDL3/SDL_main.h"
 #include "SDL3/SDL.h"
 #include "SDL3_shadercross/SDL_shadercross.h"
+#include "src/Camera.h"
 
 #include "src/ResourceManager.h"
 #include "src/SpriteBatch.h"
@@ -28,13 +29,7 @@ struct TimeInfo
 
 constexpr uint32_t SPRITE_COUNT = 10000;
 
-Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
-  0,
-  1000,
-  1000,
-  0,
-  0,
-  -1);
+Camera camera = Camera({1000, 1000});
 
 TimeInfo updateTime()
 {
@@ -102,10 +97,6 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   int windowWidth, windowHeight;
   SDL_GetWindowSize(resourceManager.GetWindow(), &windowWidth, &windowHeight);
 
-  Matrix4x4 cameraMatrix = Matrix4x4_CreateOrthographicOffCenter(
-    0, windowWidth, windowHeight, 0, 0, -1
-  );
-
   float centerX = windowWidth / 2.0f;
   float centerY = windowHeight / 2.0f;
 
@@ -156,8 +147,10 @@ SDL_AppResult SDL_AppIterate(void* appstate)
     };
 
     SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(
-      commandBuffer, &colorTarget, 1, NULL);
-    spriteBatch->Draw(renderPass, commandBuffer, cameraMatrix);
+      commandBuffer, &colorTarget, 1, nullptr);
+    spriteBatch->Draw(renderPass, commandBuffer, camera.GetViewMatrix());
+
+    camera.SetScale(camera.GetScale() * 1.001f);
 
     SDL_EndGPURenderPass(renderPass);
   }
