@@ -19,11 +19,11 @@ struct PositionTextureVertex
 
 struct SpriteInstance
 {
-    alignas(16) float x, y, z;
-    alignas(16) float rotation;
-    alignas(16) float w, h;
-    alignas(16) float tex_u, tex_v, tex_w, tex_h;
-    alignas(16) float r, g, b, a;
+    float x, y, z;
+    float rotation;
+    float w, h, pad1, pad2;
+    float tex_u, tex_v, tex_w, tex_h;
+    float r, g, b, a;
 };
 
 class SpriteBatch
@@ -32,6 +32,8 @@ private:
     ResourceManager* resourceManager;
     SDL_GPUBuffer* spriteBuffer;
     SDL_GPUTransferBuffer* transferBuffer;
+    SDL_GPUTexture* texture = nullptr;
+    SDL_GPUSampler* sampler = nullptr;
 
     std::string name;
     std::vector<SpriteInstance> sprites;
@@ -45,7 +47,9 @@ public:
     void Reserve(size_t count);
 
     // Add a single sprite
-    void AddSprite(float x, float y, float scale = 1.0f);
+    void AddSprite(const SpriteInstance&);
+
+    void SetTexture(SDL_GPUTexture* tex, SDL_GPUSampler* samp);
 
     // Get raw pointer to sprite data for bulk updates
     SpriteInstance* GetSpriteData();

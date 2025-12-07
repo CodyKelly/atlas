@@ -88,17 +88,29 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
     .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
   };
-  resourceManager.CreateSampler("spriteSampler", &samplerInfo);
+  auto sampler = resourceManager.CreateSampler("spriteSampler", &samplerInfo);
 
   spriteBatch = new SpriteBatch("sprites", &resourceManager, 1000000);
 
   for (int i = 0; i < SPRITE_COUNT; i++)
   {
-    spriteBatch->AddSprite(rand() % 1000, rand() % 1000, 10.0f);
+    spriteBatch->AddSprite({
+      0, 0, 0,
+      0,
+      100, 100, 0, 0,
+      0.0f, 0.0f, 1.0f, 1.0f,
+      1, 1, 1, 1
+    });
   }
 
   // Setup texture
   auto imageData = resourceManager.LoadPNG("./Content/Textures/atlas.png", 4);
+  if (!imageData)
+  {
+    SDL_Log("Failed to load texture!");
+    return SDL_APP_FAILURE;
+  }
+  SDL_Log("Loaded texture: %dx%d, format=%d", imageData->w, imageData->h, imageData->format);
   auto texture = resourceManager.CreateTexture(
     "sprite_atlas",
     imageData
@@ -139,6 +151,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
   SDL_EndGPUCopyPass(copyPass);
   SDL_SubmitGPUCommandBuffer(uploadCmdBuf);
 
+  spriteBatch->SetTexture(texture, sampler);
+
   // Clean up the surface after upload
   SDL_DestroySurface(imageData);
 
@@ -154,20 +168,8 @@ SDL_AppResult SDL_AppIterate(void* appstate)
   SDL_GetWindowSize(resourceManager.GetWindow(), &windowWidth, &windowHeight);
   camera.SetSize({(float)windowWidth, (float)windowHeight});
 
-  float centerX = windowWidth / 2.0f;
-  float centerY = windowHeight / 2.0f;
-
-  SpriteInstance* sprites = spriteBatch->GetSpriteData();
-  size_t spriteCount = spriteBatch->GetSpriteCount();
-
-  for (size_t i = 0; i < spriteCount; i++)
-  {
-    sprites[i].x = centerX;
-    sprites[i].y = centerY;
-  }
-
   // Mark as dirty after bulk update
-  spriteBatch->MarkDirty();
+  //spriteBatch->MarkDirty();
 
   commandBuffer = SDL_AcquireGPUCommandBuffer(resourceManager.GetGPUDevice());
   if (!commandBuffer) return SDL_APP_FAILURE;

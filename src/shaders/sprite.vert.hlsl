@@ -2,8 +2,8 @@ struct SpriteData
 {
     float3 Position;
     float Rotation;
-    float Scale;
-    float3 Padding;
+    float2 Scale;
+    float2 Padding;
     float TexU, TexV, TexW, TexH;
     float4 Color;
 };
@@ -34,32 +34,23 @@ static const float2 vertexPos[6] = {
 
 Output main(uint id: SV_VertexID)
 {
-    uint spriteIndex = id / 6;
-    uint vert = triangleIndices[id % 6];
-    SpriteData sprite = DataBuffer[spriteIndex];
+    uint shapeIndex = id / 6;
+    uint vert = id % 6;
+    SpriteData shape = DataBuffer[shapeIndex];
 
-    float2 texcoord[4] = {
-        {sprite.TexU,               sprite.TexV              },
-        {sprite.TexU + sprite.TexW, sprite.TexV              },
-        {sprite.TexU,               sprite.TexV + sprite.TexH},
-        {sprite.TexU + sprite.TexW, sprite.TexV + sprite.TexH}
-    };
-
-    float c = cos(sprite.Rotation);
-    float s = sin(sprite.Rotation);
+    float c = cos(shape.Rotation);
+    float s = sin(shape.Rotation);
 
     float2 coord = vertexPos[vert];
-    coord *= sprite.Scale;
-    float2x2 rotation = {c, s, -s, c};
+    coord *= shape.Scale;
+    float2x2 rotation = { c, s, -s, c };
     coord = mul(coord, rotation);
 
-    float3 coordWithDepth = float3(coord + sprite.Position.xy, sprite.Position.z);
+    float3 coordWithDepth = float3(coord + shape.Position.xy, shape.Position.z);
 
     Output output;
 
     output.Position = mul(ViewProjectionMatrix, float4(coordWithDepth, 1.0f));
-    output.Texcoord = texcoord[vert];
-    output.Color = sprite.Color;
-
+    output.Color = shape.Color;
     return output;
 }

@@ -29,7 +29,7 @@ void SpriteBatch::Reserve(size_t count)
     sprites.reserve(count);
 }
 
-void SpriteBatch::AddSprite(float x, float y, float scale)
+void SpriteBatch::AddSprite(const SpriteInstance& sprite)
 {
     if (sprites.size() >= maxSprites)
     {
@@ -37,12 +37,7 @@ void SpriteBatch::AddSprite(float x, float y, float scale)
         return;
     }
 
-    SpriteInstance instance = {
-        x, y, 0, 0,
-        scale, 0, 0, 0,
-        1, 1, 1, 1
-    };
-    sprites.push_back(instance);
+    sprites.push_back(sprite);
     isDirty = true;
 }
 
@@ -112,6 +107,12 @@ void SpriteBatch::Upload(SDL_GPUCommandBuffer* commandBuffer)
     isDirty = false;
 }
 
+void SpriteBatch::SetTexture(SDL_GPUTexture* tex, SDL_GPUSampler* samp)
+{
+    texture = tex;
+    sampler = samp;
+}
+
 void SpriteBatch::Draw(SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* commandBuffer,
                        const Matrix4x4& viewProjection)
 {
@@ -121,6 +122,12 @@ void SpriteBatch::Draw(SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* comm
                                 resourceManager->GetGraphicsPipeline("sprites"));
 
     SDL_BindGPUVertexStorageBuffers(renderPass, 0, &spriteBuffer, 1);
+
+    SDL_GPUTextureSamplerBinding textureSamplerBinding = {
+        .texture = texture,
+        .sampler = sampler
+    };
+    SDL_BindGPUFragmentSamplers(renderPass, 0, &textureSamplerBinding, 1);
 
     SDL_PushGPUVertexUniformData(commandBuffer, 0,
                                  &viewProjection, sizeof(Matrix4x4));
