@@ -89,7 +89,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     spriteBatch->AddSprite({
         0, 0, 0,
         0,
-        100, 100, 0, 0,
+        640, 400, 0, 0,
         0.0f, 0.0f, 1.0f, 1.0f,
         1, 1, 1, 1
     });

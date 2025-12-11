@@ -22,41 +22,42 @@ cbuffer UniformBlock : register(b0, space1)
     float4x4 ViewProjectionMatrix : packoffset(c0);
 };
 
-static const float2 vertexPos[6] = {
-    { 0.0f, 0.0f },  // Top-left
-    { 1.0f, 0.0f },  // Top-right
-    { 0.0f, 1.0f },  // Bottom-left
-
-    { 1.0f, 0.0f },  // Top-right
-    { 1.0f, 1.0f },  // Bottom-right
-    { 0.0f, 1.0f }   // Bottom-left
+static const uint triangleIndices[6] = {0, 1, 2, 3, 2, 1};
+static const float2 vertexPos[4] = {
+    {0.0f, 0.0f},
+    {1.0f, 0.0f},
+    {0.0f, 1.0f},
+    {1.0f, 1.0f}
 };
 
 Output main(uint id: SV_VertexID)
 {
-    uint shapeIndex = id / 6;
-    uint vert = id % 6;
-    SpriteData shape = DataBuffer[shapeIndex];
+    uint spriteIndex = id / 6;
+    uint vert = triangleIndices[id % 6];
+    SpriteData sprite = DataBuffer[spriteIndex];
 
-    float c = cos(shape.Rotation);
-    float s = sin(shape.Rotation);
+    float2 texcoord[4] = {
+        {sprite.TexU,               sprite.TexV              },
+        {sprite.TexU + sprite.TexW, sprite.TexV              },
+        {sprite.TexU,               sprite.TexV + sprite.TexH},
+        {sprite.TexU + sprite.TexW, sprite.TexV + sprite.TexH}
+    };
+
+    float c = cos(sprite.Rotation);
+    float s = sin(sprite.Rotation);
 
     float2 coord = vertexPos[vert];
-
-    float2 texCoord = coord;
-    texCoord.x = shape.TexU + texCoord.x * shape.TexW;
-    texCoord.y = shape.TexV + texCoord.y * shape.TexH;
-
-    coord *= shape.Scale;
-    float2x2 rotation = { c, s, -s, c };
+    coord *= sprite.Scale;
+    float2x2 rotation = {c, s, -s, c};
     coord = mul(coord, rotation);
 
-    float3 coordWithDepth = float3(coord + shape.Position.xy, shape.Position.z);
+    float3 coordWithDepth = float3(coord + sprite.Position.xy, sprite.Position.z);
 
     Output output;
 
     output.Position = mul(ViewProjectionMatrix, float4(coordWithDepth, 1.0f));
-	output.Texcoord = texCoord;
-    output.Color = shape.Color;
+    output.Texcoord = texcoord[vert];
+    output.Color = sprite.Color;
+
     return output;
 }
