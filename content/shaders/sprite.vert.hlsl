@@ -20,6 +20,7 @@ StructuredBuffer<SpriteData> DataBuffer : register(t0, space0);
 cbuffer UniformBlock : register(b0, space1)
 {
     float4x4 ViewProjectionMatrix : packoffset(c0);
+    uint2 mapSize : packoffset(c4);
 };
 
 static const uint triangleIndices[6] = {0, 1, 2, 3, 2, 1};
@@ -47,7 +48,7 @@ Output main(uint id: SV_VertexID)
     float s = sin(sprite.Rotation);
 
     float2 coord = vertexPos[vert];
-    coord *= sprite.Scale;
+    coord *= sprite.Scale * mapSize;
     float2x2 rotation = {c, s, -s, c};
     coord = mul(coord, rotation);
 

@@ -34,8 +34,7 @@ void HexMapRenderer::Upload(SDL_GPUCommandBuffer* commandBuffer)
     isDirty = false;
 }
 
-void HexMapRenderer::Draw(SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* commandBuffer,
-                          const Matrix4x4& viewProjection)
+void HexMapRenderer::Draw(SDL_GPURenderPass* renderPass)
 {
     if (_hexMapData->GetTiles().empty()) return;
 
@@ -43,9 +42,6 @@ void HexMapRenderer::Draw(SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* c
                                 _resourceManager->GetGraphicsPipeline("sprites"));
 
     SDL_BindGPUVertexStorageBuffers(renderPass, 0, &_tileBuffer, 1);
-
-    SDL_PushGPUVertexUniformData(commandBuffer, 0,
-                                 &viewProjection, sizeof(Matrix4x4));
 
     SDL_DrawGPUPrimitives(renderPass, _hexMapData->GetTiles().size() * 6, 1, 0, 0);
 }

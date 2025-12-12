@@ -8,6 +8,8 @@
 #include "src/SpriteBatch.h"
 #include "src/CameraSystem.h"
 
+constexpr uint16_t MAP_WIDTH = 1, MAP_HEIGHT = 2;
+
 ResourceManager resourceManager;
 SpriteBatch* spriteBatch = nullptr;
 Camera camera;
@@ -20,6 +22,12 @@ struct AppState
     double fps = 0;
     bool mouseDown = false;
     Vector2 lastMousePos;
+};
+
+struct VertexUniforms
+{
+    Matrix4x4 viewProjection;
+    uint16_t mapWidth, mapHeight;
 };
 
 AppState appState;
@@ -76,14 +84,14 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
     };
     auto sampler = resourceManager.CreateSampler("spriteSampler", &samplerInfo);
 
-    // Texture loading is now encapsulated in ResourceManager
+
     auto texture = resourceManager.CreateTexture("sprite_atlas", "./content/textures/atlas.png");
     if (!texture)
     {
         return SDL_APP_FAILURE;
     }
 
-    spriteBatch = new SpriteBatch("sprites", &resourceManager, 1000000);
+    spriteBatch = new SpriteBatch("sprites", &resourceManager, 1);
     spriteBatch->SetTexture(texture, sampler);
 
     spriteBatch->AddSprite({
@@ -142,7 +150,21 @@ SDL_AppResult SDL_AppIterate(void* appstate)
         };
 
         SDL_GPURenderPass* renderPass = SDL_BeginGPURenderPass(commandBuffer, &colorTarget, 1, nullptr);
-        spriteBatch->Draw(renderPass, commandBuffer, camera.GetViewProjectionMatrix());
+
+        VertexUniforms vertex_uniforms = {
+            camera.GetViewProjectionMatrix(),
+            MAP_WIDTH,
+            MAP_HEIGHT
+        };
+
+        SDL_PushGPUVertexUniformData(
+            commandBuffer,
+            0,
+            &vertex_uniforms,
+            sizeof(vertex_uniforms)
+        );
+
+        spriteBatch->Draw(renderPass);
         SDL_EndGPURenderPass(renderPass);
     }
 

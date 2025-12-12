@@ -23,7 +23,7 @@ public:
     HexMapRenderer(ResourceManager*, HexMapData*);
 
     void Upload(SDL_GPUCommandBuffer*);
-    void Draw(SDL_GPURenderPass*, SDL_GPUCommandBuffer*, const Matrix4x4&);
+    void Draw(SDL_GPURenderPass*);
 };
 
 

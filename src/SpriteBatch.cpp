@@ -113,8 +113,7 @@ void SpriteBatch::SetTexture(SDL_GPUTexture* tex, SDL_GPUSampler* samp)
     sampler = samp;
 }
 
-void SpriteBatch::Draw(SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* commandBuffer,
-                       const Matrix4x4& viewProjection)
+void SpriteBatch::Draw(SDL_GPURenderPass* renderPass)
 {
     if (sprites.empty()) return;
 
@@ -128,9 +127,6 @@ void SpriteBatch::Draw(SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* comm
         .sampler = sampler
     };
     SDL_BindGPUFragmentSamplers(renderPass, 0, &textureSamplerBinding, 1);
-
-    SDL_PushGPUVertexUniformData(commandBuffer, 0,
-                                 &viewProjection, sizeof(Matrix4x4));
 
     SDL_DrawGPUPrimitives(renderPass, sprites.size() * 6, 1, 0, 0);
 }

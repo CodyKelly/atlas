@@ -18,7 +18,7 @@ class HexMapData
     std::pmr::vector<HexTile> _tiles;
 
 public:
-    HexMapData();
+    HexMapData(int width, int height);
     std::pmr::vector<HexTile>& GetTiles() { return _tiles; }
 };
 

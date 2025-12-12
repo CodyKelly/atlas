@@ -66,8 +66,7 @@ public:
 
     void Upload(SDL_GPUCommandBuffer* commandBuffer);
 
-    void Draw(SDL_GPURenderPass* renderPass, SDL_GPUCommandBuffer* commandBuffer,
-              const Matrix4x4& viewProjection);
+    void Draw(SDL_GPURenderPass* renderPass);
 };
 
 #endif //ATLAS_SPRITEBATCH_H
